@@ -228,7 +228,8 @@ if __name__ == "__main__":
 
         # Step - 1: rasterize segments (in native projection)
         st = timer()
-        rasterized_segs_native = r"memory\rasterized_segs_native"
+        #rasterized_segs_native = r"memory\rasterized_segs_native"
+        rasterized_segs_native = str(out_segments.parent / "rasterized_segs_native")
         arcpy.conversion.PolygonToRaster(str(out_segments), "OBJECTID", rasterized_segs_native, "CELL_CENTER", "NONE", 1)
         print("Step 1: Rasterizing segments complete", timer()-st)
 
