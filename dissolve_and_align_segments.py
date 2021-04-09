@@ -258,7 +258,7 @@ if __name__ == "__main__":
         st = timer()
         # add fields
         add_fields = [['Class_name', 'TEXT'], ['Dissolve', 'Double']]
-        arcpy.management.AddFields(r"memory\temp_segs", fields)
+        arcpy.management.AddFields(r"memory\temp_segs", add_fields)
 
         # fields
         fields = ["Class_name", "Dissolve"]
