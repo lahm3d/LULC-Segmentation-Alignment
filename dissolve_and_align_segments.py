@@ -183,18 +183,6 @@ if __name__ == "__main__":
         description='Dissolving Segments Script'
         )
     parser.add_argument('-batch', type=str, help='batch file')
-    # parser.add_argument('-segs', type=str, help='input segment')
-    # parser.add_argument('-o_segs', type=str, help='output segment')
-    # parser.add_argument('-lc_raw', type=str, help='landcover raw')
-    # parser.add_argument('-lc_albers', type=str, help='landcover in albers')
-    # parser.add_argument('-segs_aligned', type=str, help='aligned segments')
-
-    # args = parser.parse_args()
-    # segments = Path(args.segs)
-    # out_segments = Path(args.o_segs)
-    # lc_raw = Path(args.lc_raw)
-    # lc_albers = Path(args.lc_albers)
-    # segs_aligned = Path(args.segs_aligned)
 
     args = parser.parse_args()
     batch = pd.read_csv(args.batch)
@@ -208,11 +196,7 @@ if __name__ == "__main__":
         segs_aligned = Path(fname['aligned_segs'])
 
         arcpy.env.workspace = str(out_segments.parent)
-        # print(arcpy.Exists(segments))
-        # print(arcpy.Exists(out_segments))
-        # print(arcpy.Exists(lc_raw))
-        # print(arcpy.Exists(lc_albers))
-        # print(arcpy.Exists(segs_aligned))
+        arcpy.env.overwriteOutput = True
 
         # start
         start = timer()
@@ -228,16 +212,15 @@ if __name__ == "__main__":
 
         # Step - 1: rasterize segments (in native projection)
         st = timer()
-        #rasterized_segs_native = r"memory\rasterized_segs_native"
         rasterized_segs_native = str(out_segments.parent / "rasterized_segs_native")
-        arcpy.conversion.PolygonToRaster(str(out_segments), "OBJECTID", rasterized_segs_native, "CELL_CENTER", "NONE", 1)
-        print("Step 1: Rasterizing segments complete", timer()-st)
+        arcpy.conversion.PolygonToRaster(str(out_segments), "OBJECTID", rasterized_segs_native, "CELL_CENTER", "NONE", str(lc_raw))
+        print("Step 1: Rasterizing segments complete", round((timer()-st)/60.0, 2))
 
         # Step - 2: project rasterized segments to albers
         st = timer()
         arcpy.env.snapRaster = str(lc_albers)
         arcpy.env.cellSize = 1
-        rasterized_segs_albers = r"memory\rasterized_segs_albers"
+        rasterized_segs_albers = str(out_segments.parent / "rasterized_segs_albers")
         albers_spatial_reference = arcpy.SpatialReference(102039)
 
         arcpy.management.ProjectRaster(
@@ -245,20 +228,20 @@ if __name__ == "__main__":
             )
 
         arcpy.management.Delete(rasterized_segs_native)
-        print("Step 2: Project rasterized segments to albers complete", timer()-st)
+        print("Step 2: Project rasterized segments to albers complete", round((timer()-st)/60.0, 2))
 
         # Step - 3: Vectorize the projected segments and join the attributes back based on FID/ObjectID
         st = timer()
-        temp_segs = r"memory\temp_segs"
+        temp_segs = str(out_segments.parent / "temp_segs")
         arcpy.conversion.RasterToPolygon(rasterized_segs_albers, temp_segs, "NO_SIMPLIFY", "Value", "SINGLE_OUTER_PART", None)
         arcpy.management.Delete(rasterized_segs_albers)
-        print("Step 3: Vectorizing the raster segments complete", timer()-st)
+        print("Step 3: Vectorizing the raster segments complete", round((timer()-st)/60.0, 2))
 
         # Step - 4: Join class_name and dissolve back to the segments
         st = timer()
         # add fields
         add_fields = [['Class_name', 'TEXT'], ['Dissolve', 'Double']]
-        arcpy.management.AddFields(r"memory\temp_segs", add_fields)
+        arcpy.management.AddFields(temp_segs, add_fields)
 
         # fields
         fields = ["Class_name", "Dissolve"]
@@ -280,13 +263,13 @@ if __name__ == "__main__":
                     # dissolve
                     row[2] = seg_data_to_join[row[0]][1]
                     cursor.updateRow(row)
-        print("Step 4: Fields joined back", timer()-st)
+        print("Step 4: Fields joined back", round((timer()-st)/60.0, 2))
 
         # write out aligned segments from memory
         st = timer()
         arcpy.CopyFeatures_management(temp_segs, str(segs_aligned))
         arcpy.management.Delete(temp_segs)
-        print("Step 5: Aligned segments saved", timer()-st)
+        print("Step 5: Aligned segments saved", round((timer()-st)/60.0, 2))
 
         end = round((timer()-start)/60.0, 2)
         print(f"Total processing time: {end} mins")
