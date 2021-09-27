@@ -217,10 +217,9 @@ if __name__ == "__main__":
         lc_albers = Path(fname['lc_albers'])
         segs_aligned = Path(fname['aligned_segs'])
         segs_aligned = Path(fname['aligned_segs'])
-        temp_folder = Path(fname['temp'])
         
         # set temp folders and clean up any leftovers
-        set_temp_folders(temp_folder)
+        set_temp_folders(lc_albers.parent)
         
         arcpy.env.workspace = str(out_segments.parent)
         arcpy.env.overwriteOutput = True
