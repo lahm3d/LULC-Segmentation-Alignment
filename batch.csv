@@ -1,2 +1,2 @@
-segs,o_segs,lc_raw,lc_albers,aligned_segs
-C:\...\balt_24005_landcover_2018_draft_spf ,C:\...\balt_24005_landcover_2018_draft_spf ,C:\...\balt_24005_landcover_2018_spf.img ,C:\...\balt_24005_lc_2018_project_test.img ,C:\...\aligned_segs
+segs,o_segs,lc_raw,lc_albers,aligned_segs,temp
+C:\...\balt_24005_landcover_2018_draft_spf ,C:\...\balt_24005_landcover_2018_draft_spf ,C:\...\balt_24005_landcover_2018_spf.img ,C:\...\balt_24005_lc_2018_project_test.img ,C:\...\aligned_segs, c:\temp
