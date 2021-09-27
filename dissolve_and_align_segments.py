@@ -6,6 +6,7 @@ import os
 import arcpy
 import sys
 import pandas as pd
+import shutil
 
 def create_and_calc_uid(out_segments, OBJID, UID):
     """ create uid field as text and copy over objectid """
@@ -177,6 +178,27 @@ def calculate_max(file, field, query_is_not):
     query = f"{field} {query_is_not}"
     return arcpy.da.SearchCursor(file, [field], query, sql_clause=(None, "ORDER BY {} DESC".format(field))).next()[0]
 
+def set_temp_folders(temp_folder):
+    temp_path = temp_folder / 'temp_alignment'
+
+    # if the temp folder doesn't 
+    if not temp_path.is_file():
+        os.mkdir(temp_path)
+
+    os.environ['TMP'] = temp_path
+    os.environ['ESRI_OS_DIR_DONOTUSE'] = temp_path
+    os.environ['TEMP'] = temp_path
+
+    delete_list = list(temp_path.rglob('*')) # list of all temp files
+
+    for i in temp_del_list:
+        if os.path.isfile(i):
+            os.remove(i)
+        elif os.path.isdir(i):
+            shutil.rmtree(i)
+
+    del temp_del_list
+    return 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -194,7 +216,12 @@ if __name__ == "__main__":
         lc_raw = Path(fname['lc_raw'])
         lc_albers = Path(fname['lc_albers'])
         segs_aligned = Path(fname['aligned_segs'])
-
+        segs_aligned = Path(fname['aligned_segs'])
+        temp_folder = Path(fname['temp'])
+        
+        # set temp folders and clean up any leftovers
+        set_temp_folders(temp_folder)
+        
         arcpy.env.workspace = str(out_segments.parent)
         arcpy.env.overwriteOutput = True
 
@@ -206,7 +233,7 @@ if __name__ == "__main__":
             arcpy.AddError("Unable to get spatial analyst extension")
             arcpy.AddMessage(arcpy.GetMessages(0))
             sys.exit(0)
-
+        
         # dissolve segs
         dissolve_segs(segments, out_segments)
 
