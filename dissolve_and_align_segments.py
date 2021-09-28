@@ -191,7 +191,7 @@ def set_temp_folders(temp_folder):
 
     delete_list = list(temp_path.rglob('*')) # list of all temp files
 
-    for i in temp_del_list:
+    for i in delete_list:
         if os.path.isfile(i):
             os.remove(i)
         elif os.path.isdir(i):
