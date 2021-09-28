@@ -2,7 +2,7 @@
 Workflow to dissolve and align segments
 
 To execute:
-`C:\Program Files\ArcGIS\Pro\bin\Python\envs\arcgispro-py3\python dissolve_and_align_segments.py -batch batch.csv`
+`C:\Program Files\ArcGIS\Pro\bin\Python\envs\arcgispro-py3\python batch_wrapper.py -batch batch.csv -arcpy "c:\Program Files\ArcGIS\Pro\bin\Python\envs\arcgispro-py3\python.exe"`
 
 Batch csv contains paths for all the files the script needs to execute. You can add multiple counties here has well. It should be formatted like this:
 
