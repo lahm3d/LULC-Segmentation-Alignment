@@ -201,101 +201,93 @@ def set_temp_folders(temp_folder):
     return 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description='Dissolving Segments Script'
+    
+    segments, out_segments, lc_raw, lc_albers, segs_aligned = sys.argv[1:]
+
+    segments = Path(segments)
+    out_segments = Path(out_segments)
+    lc_raw = Path(lc_raw)
+    lc_albers = Path(lc_albers)
+    segs_aligned= Path(segs_aligned)
+
+    # set temp folders and clean up any leftovers
+    set_temp_folders(lc_albers.parent)
+
+    arcpy.env.workspace = str(out_segments.parent)
+    arcpy.env.overwriteOutput = True
+
+    # start
+    start = timer()
+    if arcpy.CheckExtension("Spatial") == "Available":
+        arcpy.CheckOutExtension("Spatial")
+    else:
+        arcpy.AddError("Unable to get spatial analyst extension")
+        arcpy.AddMessage(arcpy.GetMessages(0))
+        sys.exit(0)
+
+    # dissolve segs
+    dissolve_segs(segments, out_segments)
+
+    # Step - 1: rasterize segments (in native projection)
+    st = timer()
+    rasterized_segs_native = str(out_segments.parent / "rasterized_segs_native")
+    arcpy.conversion.PolygonToRaster(str(out_segments), "OBJECTID", rasterized_segs_native, "CELL_CENTER", "NONE", str(lc_raw))
+    print("Step 1: Rasterizing segments complete", round((timer()-st)/60.0, 2))
+
+    # Step - 2: project rasterized segments to albers
+    st = timer()
+    arcpy.env.snapRaster = str(lc_albers)
+    arcpy.env.cellSize = 1
+    rasterized_segs_albers = str(out_segments.parent / "rasterized_segs_albers")
+    albers_spatial_reference = arcpy.SpatialReference(102039)
+
+    arcpy.management.ProjectRaster(
+        rasterized_segs_native, rasterized_segs_albers, albers_spatial_reference, "NEAREST", "1", vertical="NO_VERTICAL"
         )
-    parser.add_argument('-batch', type=str, help='batch file')
 
-    args = parser.parse_args()
-    batch = pd.read_csv(args.batch)
-    batch_records = batch.to_dict('records')
+    arcpy.management.Delete(rasterized_segs_native)
+    print("Step 2: Project rasterized segments to albers complete", round((timer()-st)/60.0, 2))
 
-    for fname in batch_records:
-        segments = Path(fname['segs'])
-        out_segments = Path(fname['o_segs'])
-        lc_raw = Path(fname['lc_raw'])
-        lc_albers = Path(fname['lc_albers'])
-        segs_aligned = Path(fname['aligned_segs'])
-        segs_aligned = Path(fname['aligned_segs'])
-        
-        # set temp folders and clean up any leftovers
-        set_temp_folders(lc_albers.parent)
-        
-        arcpy.env.workspace = str(out_segments.parent)
-        arcpy.env.overwriteOutput = True
+    # Step - 3: Vectorize the projected segments and join the attributes back based on FID/ObjectID
+    st = timer()
+    temp_segs = str(out_segments.parent / "temp_segs")
+    arcpy.conversion.RasterToPolygon(rasterized_segs_albers, temp_segs, "NO_SIMPLIFY", "Value", "SINGLE_OUTER_PART", None)
+    arcpy.management.Delete(rasterized_segs_albers)
+    print("Step 3: Vectorizing the raster segments complete", round((timer()-st)/60.0, 2))
 
-        # start
-        start = timer()
-        if arcpy.CheckExtension("Spatial") == "Available":
-            arcpy.CheckOutExtension("Spatial")
-        else:
-            arcpy.AddError("Unable to get spatial analyst extension")
-            arcpy.AddMessage(arcpy.GetMessages(0))
-            sys.exit(0)
-        
-        # dissolve segs
-        dissolve_segs(segments, out_segments)
+    # Step - 4: Join class_name and dissolve back to the segments
+    st = timer()
+    # add fields
+    add_fields = [['Class_name', 'TEXT'], ['Dissolve', 'Double']]
+    arcpy.management.AddFields(temp_segs, add_fields)
 
-        # Step - 1: rasterize segments (in native projection)
-        st = timer()
-        rasterized_segs_native = str(out_segments.parent / "rasterized_segs_native")
-        arcpy.conversion.PolygonToRaster(str(out_segments), "OBJECTID", rasterized_segs_native, "CELL_CENTER", "NONE", str(lc_raw))
-        print("Step 1: Rasterizing segments complete", round((timer()-st)/60.0, 2))
+    # fields
+    fields = ["Class_name", "Dissolve"]
 
-        # Step - 2: project rasterized segments to albers
-        st = timer()
-        arcpy.env.snapRaster = str(lc_albers)
-        arcpy.env.cellSize = 1
-        rasterized_segs_albers = str(out_segments.parent / "rasterized_segs_albers")
-        albers_spatial_reference = arcpy.SpatialReference(102039)
+    # get Class_name values
+    seg_data_to_join = {r[0]: (r[1], r[2]) for r in arcpy.da.SearchCursor(str(out_segments), ["OBJECTID"] + fields)}
 
-        arcpy.management.ProjectRaster(
-            rasterized_segs_native, rasterized_segs_albers, albers_spatial_reference, "NEAREST", "1", vertical="NO_VERTICAL"
-            )
+    # iterate over 100k rows and update class_name and dissolve fields
+    step = 100000
+    max_value = calculate_max(temp_segs, "OBJECTID", "IS NOT NULL")
+    for x in range(0, max_value, step):
+        min = x
+        max = x - 1 + step
+        batch_query = f'"OBJECTID" >= {min} AND "OBJECTID" <= {max}'
+        with arcpy.da.UpdateCursor(temp_segs, ['gridcode'] + fields, batch_query) as cursor:
+            for row in cursor:
+                # class name
+                row[1] = seg_data_to_join[row[0]][0]
+                # dissolve
+                row[2] = seg_data_to_join[row[0]][1]
+                cursor.updateRow(row)
+    print("Step 4: Fields joined back", round((timer()-st)/60.0, 2))
 
-        arcpy.management.Delete(rasterized_segs_native)
-        print("Step 2: Project rasterized segments to albers complete", round((timer()-st)/60.0, 2))
+    # write out aligned segments from memory
+    st = timer()
+    arcpy.CopyFeatures_management(temp_segs, str(segs_aligned))
+    arcpy.management.Delete(temp_segs)
+    print("Step 5: Aligned segments saved", round((timer()-st)/60.0, 2))
 
-        # Step - 3: Vectorize the projected segments and join the attributes back based on FID/ObjectID
-        st = timer()
-        temp_segs = str(out_segments.parent / "temp_segs")
-        arcpy.conversion.RasterToPolygon(rasterized_segs_albers, temp_segs, "NO_SIMPLIFY", "Value", "SINGLE_OUTER_PART", None)
-        arcpy.management.Delete(rasterized_segs_albers)
-        print("Step 3: Vectorizing the raster segments complete", round((timer()-st)/60.0, 2))
-
-        # Step - 4: Join class_name and dissolve back to the segments
-        st = timer()
-        # add fields
-        add_fields = [['Class_name', 'TEXT'], ['Dissolve', 'Double']]
-        arcpy.management.AddFields(temp_segs, add_fields)
-
-        # fields
-        fields = ["Class_name", "Dissolve"]
-
-        # get Class_name values
-        seg_data_to_join = {r[0]: (r[1], r[2]) for r in arcpy.da.SearchCursor(str(out_segments), ["OBJECTID"] + fields)}
-
-        # iterate over 100k rows and update class_name and dissolve fields
-        step = 100000
-        max_value = calculate_max(temp_segs, "OBJECTID", "IS NOT NULL")
-        for x in range(0, max_value, step):
-            min = x
-            max = x - 1 + step
-            batch_query = f'"OBJECTID" >= {min} AND "OBJECTID" <= {max}'
-            with arcpy.da.UpdateCursor(temp_segs, ['gridcode'] + fields, batch_query) as cursor:
-                for row in cursor:
-                    # class name
-                    row[1] = seg_data_to_join[row[0]][0]
-                    # dissolve
-                    row[2] = seg_data_to_join[row[0]][1]
-                    cursor.updateRow(row)
-        print("Step 4: Fields joined back", round((timer()-st)/60.0, 2))
-
-        # write out aligned segments from memory
-        st = timer()
-        arcpy.CopyFeatures_management(temp_segs, str(segs_aligned))
-        arcpy.management.Delete(temp_segs)
-        print("Step 5: Aligned segments saved", round((timer()-st)/60.0, 2))
-
-        end = round((timer()-start)/60.0, 2)
-        print(f"Total processing time: {end} mins")
+    end = round((timer()-start)/60.0, 2)
+    print(f"Total processing time: {end} mins")
