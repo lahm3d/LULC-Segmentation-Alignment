@@ -35,9 +35,8 @@ if __name__ == "__main__":
         lc_raw = Path(fname['lc_raw'])
         lc_albers = Path(fname['lc_albers'])
         segs_aligned = Path(fname['aligned_segs'])
-        segs_aligned = Path(fname['aligned_segs'])
         #windows pathlib format
-        args = [segments, out_segments, lc_raw, lc_albers, segs_aligned, segs_aligned,]
+        args = [segments, out_segments, lc_raw, lc_albers, segs_aligned,]
         # convert to string
         args = [str(arg) for arg in args]
 
