@@ -197,7 +197,7 @@ def set_temp_folders(temp_folder):
         elif os.path.isdir(i):
             shutil.rmtree(i)
 
-    del temp_del_list
+    del delete_list
     return 
 
 if __name__ == "__main__":
