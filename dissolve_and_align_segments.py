@@ -185,9 +185,9 @@ def set_temp_folders(temp_folder):
     if not temp_path.is_file():
         os.mkdir(temp_path)
 
-    os.environ['TMP'] = temp_path
-    os.environ['ESRI_OS_DIR_DONOTUSE'] = temp_path
-    os.environ['TEMP'] = temp_path
+    os.environ['TMP'] = str(temp_path)
+    os.environ['ESRI_OS_DIR_DONOTUSE'] = str(temp_path)
+    os.environ['TEMP'] = str(temp_path)
 
     delete_list = list(temp_path.rglob('*')) # list of all temp files
 
